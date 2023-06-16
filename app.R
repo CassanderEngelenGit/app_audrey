@@ -3,7 +3,7 @@ if(!require(pacman)){
   install.packages("pacman")
   library(pacman)
 }
-pacman::p_load(tidyverse, shiny, shinydashboard, lubridate)
+pacman::p_load(tidyverse, shiny, shinydashboard, lubridate, DT)
 
 ##################
 ### FUNCTIONS ###
@@ -37,20 +37,38 @@ ui <- dashboardPage(
   ############################################
   
   # create the body of the different pages
-  dashboardBody()
+  dashboardBody(
+    tabItems(
+      tabItem(
+        tabName = "match",
+        
+        fluidRow(
+          h2("Select plant 1"),
+          column(12, title = "data1", 
+                 DT::dataTableOutput("data")),
+          h2("Select plant 2"),
+          column(12, title = "data2", 
+                 DT::dataTableOutput("data2")),
+          h2("Select plant result"),
+          column(12, title = "data1", 
+                 DT::dataTableOutput("data3")))
+        )
+      )
+    )
+  )
   
-  
-)
+
 ############################################
 server <- function(input, output, session) {
-  dat <- reactive{
-    test.data %>% 
-      subset(program %in% input$program &
-               type %in% input$type &
-               vigour %in% input$vigour &
-               shape %in% input$shape &
-               pollen_quality %in% input$pollen_quality)
-  }
+  dat <- reactive({test.data})
+  dat2 <- reactive({
+    dat()[input$data_rows_selected,] %>% 
+      bind_rows(dat()[input$data2_rows_selected,]) 
+  })
+  
+  output$data <-  DT::renderDataTable(dat(), selection = "single")
+  output$data2 <-  DT::renderDataTable(dat(), selection = "single")
+  output$data3 <-  DT::renderDataTable(dat2(), selection = "single")
   
 }
 
