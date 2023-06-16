@@ -3,7 +3,9 @@ if(!require(pacman)){
   install.packages("pacman")
   library(pacman)
 }
-pacman::p_load(tidyverse, shiny, shinydashboard, lubridate, DT)
+pacman::p_load(tidyverse, shiny, shinydashboard, lubridate, DT, knitr, tinytex)
+
+tinytex::install_tinytex()
 
 ##################
 ### FUNCTIONS ###
@@ -31,7 +33,8 @@ ui <- dashboardPage(
   # create sidebar menu items
   dashboardSidebar(
     sidebarMenu(
-      menuItem(text = "Mix and Match", tabName = "match")
+      menuItem(text = "Mix and Match", tabName = "match"),
+      downloadButton(outputId = "pdf_table", label = "report.pdf")
     )
   ),
   
@@ -90,6 +93,26 @@ server <- function(input, output, session) {
   output$data <-  DT::renderDataTable(dat(), selection = "single")
   output$data2 <-  DT::renderDataTable(dat2(), selection = "single")
   output$data3 <-  DT::renderDataTable(dat3(), selection = "single")
+  output$pdf_table <- downloadHandler(
+    
+    filename = "breeding_table.pdf",
+    
+    content = function(file){
+      
+      tempReport <- file.path(tempdir(),"report2.Rmd")
+      
+      file.copy("../report2.Rmd", tempReport, overwrite = TRUE)
+      
+      params <- list(table_for_pdf = dat3())
+      
+      file.copy("report2.Rmd", tempReport, overwrite = TRUE)
+      
+      rmarkdown::render(tempReport, output_file = file,
+                        params = params,
+                        envir = new.env(parent = globalenv()), encoding = "UTF-8")
+      
+    }
+  )
   
 }
 

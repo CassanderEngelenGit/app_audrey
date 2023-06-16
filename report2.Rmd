@@ -1,0 +1,15 @@
+---
+output: pdf_document
+params:
+  table_for_pdf: NA
+---
+
+## Selected breeding pairs
+
+This is a test Rmd document to see if it works to download it as an pdf
+
+```{r cars}
+kable(params$table_for_pdf)
+```
+
+
