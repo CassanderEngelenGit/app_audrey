@@ -33,7 +33,8 @@ ui <- dashboardPage(
       menuItem(text = "Mix and Match", tabName = "match"),
       menuItem(text = "Breeding pairs", tabName = "pairs"),
       downloadButton(outputId = "pdf_table", label = "report.pdf"),
-      actionButton("create", "Create table")
+      actionButton("create", "Create table"),
+      actionButton("delete", "delete selected row")
     )
   ),
   
@@ -148,6 +149,15 @@ server <- function(input, output, session) {
 
     })
   
+  
+  observeEvent(input$delete, {
+    
+    existingTable <- table2()
+    
+    updatedTable <- table2()[-input$data4_rows_selected,]
+    
+    table2(updatedTable)
+  })
   
 ################################################################################
  
