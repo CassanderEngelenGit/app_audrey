@@ -129,7 +129,20 @@ server <- function(input, output, session) {
 
     existingTable <- table2()
     
-    updatedTable <- bind_rows(table2(), row)
+    if(nrow(existingTable) == 0){
+      updatedTable <- bind_rows(existingTable, row)  
+      
+    }
+    
+    else{
+      if(!existingTable[nrow(existingTable),6] == row[6]){
+        updatedTable <- bind_rows(existingTable, row)
+      }
+      
+      else{
+        updatedTable <- existingTable
+      }
+    }
     
     table2(updatedTable)
 
