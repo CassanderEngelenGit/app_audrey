@@ -122,19 +122,11 @@ server <- function(input, output, session) {
   selectedRow <- reactiveVal(NULL)
   table2 <- reactiveVal(tibble())
   
+  
   observeEvent(input$create, {
     
-    selectedRowData <- dat3()[3,]
-    
-    selectedRow(selectedRowData)
-    
-  })
-  
-  
-  
-  observeEvent(selectedRow(), {
-    row <- selectedRow()
-    
+    row <- dat3()[3,]
+
     existingTable <- table2()
     
     updatedTable <- bind_rows(table2(), row)
