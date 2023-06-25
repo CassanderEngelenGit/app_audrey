@@ -19,10 +19,7 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem(text = "Input data", tabName = "input"),
       menuItem(text = "Mix and Match", tabName = "match"),
-      menuItem(text = "Breeding pairs", tabName = "pairs"),
-      downloadButton(outputId = "pdf_table", label = "report.pdf"),
-      actionButton("create", "Create table"),
-      actionButton("delete", "delete selected row")
+      menuItem(text = "Breeding pairs", tabName = "pairs")
     )
   ),
   
@@ -44,7 +41,7 @@ ui <- dashboardPage(
             numericInput("vigor", "vigor", min = 1, max = 9, step = 1, value = 1),
             numericInput("pollen", "pollen quality", min = 1, max = 9, step = 1, value = 1),
             radioButtons("canopy", "canopy cover", choices = c("leave empty", "open", "semi-open", "closed")),
-            dateInput("flowering", "flowering date"),
+            dateInput("flowering", "flowering date", value = as.Date(NA)),
             textInput("background", "background"),
             textInput("notes", "notes"),
             fileInput("file1", "Choose CSV",
@@ -60,7 +57,7 @@ ui <- dashboardPage(
       
       tabItem(
         tabName = "match",
-        actionButton("start_matching", "start matching", stype = "width:800px"),
+        actionButton("start_matching", "start matching", style = "width:800px"),
         
         fluidRow(
           h2("Select female"),
@@ -71,18 +68,33 @@ ui <- dashboardPage(
           column(12, title = "males", 
                  DT::dataTableOutput("dataMales")),
           
-          actionButton("combine", "combine selected", stype = "width:800px"),
+          actionButton("combine", "combine selected"),
         
           h2("Breeding pair"),
           column(12, title = "breeding pair", 
-                 DT::dataTableOutput("dataPaired")))
+                 DT::dataTableOutput("dataPaired"))),
+          actionButton("create", "add to breeding table")
         # end tabItem 1
         ),
       tabItem(
         tabName = "pairs",
         
         fluidRow(
-          
+          box(
+          # create inputs to alter of add rows to table
+            textInput("field2", " field number"),
+            radioButtons("sex2", "sex", c("male", "female"), selected = character(0)),
+            radioButtons("type2", "type", c("Bush", "Semi Bush", "Vine", "Netted Vine"), selected = character(0)),
+            numericInput("vigor2", "vigor", min = 1, max = 9, step = 1, value = NA),
+            numericInput("pollen2", "pollen quality", min = 1, max = 9, step = 1, value = NA),
+            radioButtons("canopy2", "canopy cover", choices = c("leave empty", "open", "semi-open", "closed"), selected = character(0)),
+            dateInput("flowering2", "flowering date", value = as.Date(NA)),
+            textInput("background2", "background"),
+            textInput("notes2", "notes"),
+            actionButton("updateTable2", "update row"),
+            actionButton("delete", "delete selected row")
+          ),
+        
           h2("Breeding couples"),
           
           column(12, title = "Combined table", 
@@ -148,15 +160,15 @@ server <- function(input, output, session) {
     
     current_table <- data_csv()
     
-    new_row <- tibble(field_nr = ifelse(is.null(input$field), NULL, input$field), 
-                      sex = ifelse(is.null(input$sex), NULL, input$sex), 
-                      type = ifelse(is.null(input$type), NULL, input$type),
-                      vigor = ifelse(is.null(input$vigor), NULL, input$vigor),
-                      pollen_quality = ifelse(is.null(input$pollen), NULL, input$pollen),
-                      canopy_cover = ifelse(is.null(input$canopy), NULL, input$canopy),
-                      background = ifelse(is.null(input$background), NULL, input$background),
-                      notes = ifelse(is.null(input$notes), NULL, input$notes),
-                      flowering_date = ifelse(is.null(input$flowering), NULL, as.character(input$flowering))) %>% 
+    new_row <- tibble(field_nr = ifelse(is.null(input$field), NA, input$field), 
+                      sex = ifelse(is.null(input$sex), NA, input$sex), 
+                      type = ifelse(is.null(input$type), NA, input$type),
+                      vigor = ifelse(is.null(input$vigor), NA, input$vigor),
+                      pollen_quality = ifelse(is.null(input$pollen), NA, input$pollen),
+                      canopy_cover = ifelse(is.null(input$canopy), NA, input$canopy),
+                      background = ifelse(is.null(input$background), NA, input$background),
+                      notes = ifelse(is.null(input$notes), NA, input$notes),
+                      flowering_date = ifelse(is.null(input$flowering), NA, as.character(input$flowering))) %>% 
       mutate(flowering_date = as.Date(flowering_date))
     
     current_table[row,] <- new_row
@@ -197,15 +209,15 @@ server <- function(input, output, session) {
     row_f <- input$dataFemales_rows_selected
     row_m <- input$dataMales_rows_selected
     
-    tibble(field_nr = "-", 
-           sex = "-", 
-           type = paste("p:", dataFem()[[row_f, "type"]], "X", dataMal()[[row_m, "type"]]),
-           vigor = paste("p:", dataFem()[[row_f, "vigor"]], "X", dataMal()[[row_m, "vigor"]]),
-           pollen_quality = paste("p:", dataFem()[[row_f, "pollen quality"]], "X", dataMal()[[row_m, "pollen quality"]]),
-           canopy_cover = paste("p:", dataFem()[[row_f, "canopy cover"]], "X", dataMal()[[row_m, "canopy cover"]]),
+    tibble(field_nr = NA, 
+           sex = NA, 
+           type = NA,
+           vigor = NA,
+           pollen_quality = NA,
+           canopy_cover = NA,
            background = paste("p:", dataFem()[[row_f, "field_nr"]], "X", dataMal()[[row_m, "field_nr"]]),
-           other_notes = "-", 
-           flowering_date = "-"
+           other_notes = NA, 
+           flowering_date = NA
     )
     
   })
@@ -257,6 +269,47 @@ server <- function(input, output, session) {
   
   
 ################################################################################
+  # ALTER TABLE OF BREEDING PAIRS #
+  # update the main userInputs on the first page to the selected row
+  observeEvent(input$combinedTable_rows_selected, {
+    row <- input$combinedTable_rows_selected
+    
+    updateTextInput(session, "field2", value = combined()[[row, "field_nr"]])
+    updateRadioButtons(session, "sex2", selected = combined()[[row, "sex"]])
+    updateRadioButtons(session, "type2", selected = combined()[[row, "type"]])
+    updateNumericInput(session, "vigor2", value = combined()[[row, "vigor"]])
+    updateNumericInput(session, "pollen2", value = combined()[[row, "pollen quality"]])
+    updateRadioButtons(session, "canopy2", selected = combined()[[row, "canopy cover"]])
+    updateDateInput(session, "flowering2", value = combined()[[row, "flowering date"]])
+    updateTextInput(session, "background2", value = combined()[[row, "background"]])
+    updateTextInput(session, "notes2", value = combined()[[row, "other notes"]])
+  })
+  
+  # update table row based on inputs
+  observeEvent(input$updateTable2,{
+    
+    row <- input$combinedTable_rows_selected
+    
+    current_table <- combined()
+    
+    new_row <- tibble(field_nr = ifelse(is.null(input$field2), NA, input$field2), 
+                      sex = ifelse(is.null(input$sex2), NA, input$sex2), 
+                      type = ifelse(is.null(input$type2), NA, input$type2),
+                      vigor = ifelse(is.null(input$vigor2), NA, input$vigor2),
+                      pollen_quality = ifelse(is.null(input$pollen2), NA, input$pollen2),
+                      canopy_cover = ifelse(is.null(input$canopy2), NA, input$canopy2),
+                      background = current_table[[row, "background"]],
+                      notes = ifelse(is.null(input$notes2), NA, input$notes2),
+                      flowering_date = ifelse(is.null(input$flowering2), NA, as.character(input$flowering2))) %>% 
+      mutate(flowering_date = as.Date(flowering_date))
+    
+    current_table[row,] <- new_row
+    
+    
+    
+    combined(current_table)
+    
+  })
   
   
 ################################################################################
