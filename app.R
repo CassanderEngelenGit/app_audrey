@@ -3,19 +3,6 @@ pacman::p_load(tidyverse, shiny, shinydashboard, lubridate, DT, knitr, tinytex, 
 
 #tinytex::install_tinytex()
 
-##################
-### FUNCTIONS ###
-################
-
-test.data <- tibble(program = c(1,1,1,2,2,3,3,3,3,3), type = c("A", "B", "B", "C", "D", "A", "B", "B", "C", "D"), 
-                    vigour = c(4,7,8,8,5,6,7,9,10,3), 
-                    shape = c("Round", "Square", "Round","Round", "Square", 
-                              "Round","Round", "Square", "Round","Square"), 
-                    pollen_quality = c(4,7,8,8,5,6,7,9,10,3),
-                    code = c("xx2", "xy3", "xx4", "xy6", "yx7", "kw7", "ix6", "uw5", "lw7", "yd7"))
-
-output <- tibble()
-
 ######################
 ### LOAD DATASETS ###
 ####################
@@ -30,6 +17,7 @@ ui <- dashboardPage(
   # create sidebar menu items
   dashboardSidebar(
     sidebarMenu(
+      menuItem(text = "Input data", tabName = "input"),
       menuItem(text = "Mix and Match", tabName = "match"),
       menuItem(text = "Breeding pairs", tabName = "pairs"),
       downloadButton(outputId = "pdf_table", label = "report.pdf"),
@@ -42,22 +30,52 @@ ui <- dashboardPage(
   
   # create the body of the different pages
   dashboardBody(
+    # create different tabItems
     tabItems(
       tabItem(
-        tabName = "match",
+        tabName = "input",
         
         fluidRow(
-          h2("Select plant 1"),
-          column(12, title = "data1", 
-                 DT::dataTableOutput("data")),
+          box(
+            # create inputs to alter of add rows to table
+            textInput("field", " field number"),
+            radioButtons("sex", "sex", c("male", "female")),
+            radioButtons("type", "type", c("Bush", "Semi Bush", "Vine", "Netted Vine")),
+            numericInput("vigor", "vigor", min = 1, max = 9, step = 1, value = 1),
+            numericInput("pollen", "pollen quality", min = 1, max = 9, step = 1, value = 1),
+            radioButtons("canopy", "canopy cover", choices = c("leave empty", "open", "semi-open", "closed")),
+            dateInput("flowering", "flowering date"),
+            textInput("background", "background"),
+            textInput("notes", "notes"),
+            fileInput("file1", "Choose CSV",
+                      accept = ".csv"),
+            actionButton("loadcsv", " load the csv"),
+            actionButton("updateTable", "update row")),
           
-          h2("Select plant 2"),
-          column(12, title = "data2", 
-                 DT::dataTableOutput("data2")),
+          # plot datatable of the input csv  
+          column(12, title = "datafile", 
+                 DT::dataTableOutput("datafile"))
+        )
+      ),
+      
+      tabItem(
+        tabName = "match",
+        actionButton("start_matching", "start matching", stype = "width:800px"),
+        
+        fluidRow(
+          h2("Select female"),
+          column(12, title = "females", 
+                 DT::dataTableOutput("dataFemales")),
           
-          h2("Select plant result"),
-          column(12, title = "data3", 
-                 DT::dataTableOutput("data3")))
+          h2("Select males"),
+          column(12, title = "males", 
+                 DT::dataTableOutput("dataMales")),
+          
+          actionButton("combine", "combine selected", stype = "width:800px"),
+        
+          h2("Breeding pair"),
+          column(12, title = "breeding pair", 
+                 DT::dataTableOutput("dataPaired")))
         # end tabItem 1
         ),
       tabItem(
@@ -67,8 +85,8 @@ ui <- dashboardPage(
           
           h2("Breeding couples"),
           
-          column(12, title = "data4", 
-                 DT::dataTableOutput("data4"))
+          column(12, title = "Combined table", 
+                 DT::dataTableOutput("combinedTable"))
           # end fluidRow
         )
     
@@ -84,51 +102,128 @@ ui <- dashboardPage(
 
 ############################################
 server <- function(input, output, session) {
-  dat <- reactive({test.data})
   
 ################################################################################
+  # LOAD AND ALTER USER CSV FILE #
   
-  dat2 <- reactive({
-    dat() %>% 
-      subset(program == dat()[[input$data_rows_selected, 1]] &
-               type == dat()[[input$data_rows_selected, 2]])
+  # create reactive data object to load csv into
+  data_csv <- reactiveVal(tibble())
+  
+  # allow upload of csv
+  dataFile <- reactive({
+    upl <- input$file1
+    
+    if (is.null(upl))
+      return(NULL)
+    
+    read_csv(upl$datapath)
   })
+  
+  # fully load the csv into the reactive data_csv object
+  observeEvent(input$loadcsv, {
+    
+    file <- dataFile()
+    data_csv(file)
+  })
+  
+  # update the main userInputs on the first page to the selected row
+  observeEvent(input$datafile_rows_selected, {
+    row <- input$datafile_rows_selected
+    
+    updateTextInput(session, "field", value = data_csv()[[row, "field_nr"]])
+    updateRadioButtons(session, "sex", selected = data_csv()[[row, "sex"]])
+    updateRadioButtons(session, "type", selected = data_csv()[[row, "type"]])
+    updateNumericInput(session, "vigor", value = data_csv()[[row, "vigor"]])
+    updateNumericInput(session, "pollen", value = data_csv()[[row, "pollen quality"]])
+    updateRadioButtons(session, "canopy", selected = data_csv()[[row, "canopy cover"]])
+    updateDateInput(session, "flowering", value = data_csv()[[row, "flowering date"]])
+    updateTextInput(session, "background", value = data_csv()[[row, "background"]])
+    updateTextInput(session, "notes", value = data_csv()[[row, "other notes"]])
+  })
+  
+  # update table row based on inputs
+  observeEvent(input$updateTable,{
+    
+    row <- input$datafile_rows_selected
+    
+    current_table <- data_csv()
+    
+    new_row <- tibble(field_nr = ifelse(is.null(input$field), NULL, input$field), 
+                      sex = ifelse(is.null(input$sex), NULL, input$sex), 
+                      type = ifelse(is.null(input$type), NULL, input$type),
+                      vigor = ifelse(is.null(input$vigor), NULL, input$vigor),
+                      pollen_quality = ifelse(is.null(input$pollen), NULL, input$pollen),
+                      canopy_cover = ifelse(is.null(input$canopy), NULL, input$canopy),
+                      background = ifelse(is.null(input$background), NULL, input$background),
+                      notes = ifelse(is.null(input$notes), NULL, input$notes),
+                      flowering_date = ifelse(is.null(input$flowering), NULL, as.character(input$flowering))) %>% 
+      mutate(flowering_date = as.Date(flowering_date))
+    
+    current_table[row,] <- new_row
+    
+    
+    
+    data_csv(current_table)
+      
+  })
+  
+  # output the datafile
+  output$datafile <- DT::renderDataTable(data_csv(), selection = "single")
+  
   
 ################################################################################
+  # SHOW AND COMBINE MALES AND FEMALES #
   
-  dat3 <- reactive({
-    dat()[input$data_rows_selected,] %>% 
-      bind_rows(dat()[input$data2_rows_selected,]) %>% 
-      bind_rows(tibble(program = dat()[[input$data_rows_selected, 1]], 
-                       
-                       type = dat()[[input$data_rows_selected, 2]],
-                       
-                       vigour = ((dat()[[input$data_rows_selected, 3]]+dat()[[input$data2_rows_selected, 3]])/2),
-                       
-                       shape = paste(dat()[[input$data_rows_selected, 4]], "-", dat()[[input$data2_rows_selected, 4]]),
-                       
-                       pollen_quality = ((dat()[[input$data_rows_selected, 5]]+dat()[[input$data2_rows_selected, 5]])/2),
-                       
-                       code = paste(dat()[[input$data_rows_selected, 6]], "-", dat()[[input$data2_rows_selected, 6]])
-                       )
-                       )
+  dataMal<- reactiveVal(tibble())
+  
+  dataFem <- reactiveVal(tibble())
+  
+  observeEvent(input$start_matching, {
+  
+    dat_m <- dataFile() %>% 
+      subset(sex == "male")
+    
+    dataMal(dat_m)
+    
+    dat_f <- dataFile() %>% 
+      subset(sex == "female")
+    
+    dataFem(dat_f)
+    
   })
-  
-  
-  
+
+  data_paired <- reactive({
+    
+    row_f <- input$dataFemales_rows_selected
+    row_m <- input$dataMales_rows_selected
+    
+    tibble(field_nr = "-", 
+           sex = "-", 
+           type = paste("p:", dataFem()[[row_f, "type"]], "X", dataMal()[[row_m, "type"]]),
+           vigor = paste("p:", dataFem()[[row_f, "vigor"]], "X", dataMal()[[row_m, "vigor"]]),
+           pollen_quality = paste("p:", dataFem()[[row_f, "pollen quality"]], "X", dataMal()[[row_m, "pollen quality"]]),
+           canopy_cover = paste("p:", dataFem()[[row_f, "canopy cover"]], "X", dataMal()[[row_m, "canopy cover"]]),
+           background = paste("p:", dataFem()[[row_f, "field_nr"]], "X", dataMal()[[row_m, "field_nr"]]),
+           other_notes = "-", 
+           flowering_date = "-"
+    )
+    
+  })
+ 
   
 ###############################################################################
-
-################################################################################
+  # ADD AND DELETE ROWS FOR NEW COMBINATIONS #
+  
   selectedRow <- reactiveVal(NULL)
-  table2 <- reactiveVal(tibble())
+  
+  combined <- reactiveVal(tibble())
   
   
   observeEvent(input$create, {
     
-    row <- dat3()[3,]
-
-    existingTable <- table2()
+    row <- data_paired()[1,]
+    
+    existingTable <- combined()
     
     if(nrow(existingTable) == 0){
       updatedTable <- bind_rows(existingTable, row)  
@@ -136,7 +231,7 @@ server <- function(input, output, session) {
     }
     
     else{
-      if(!existingTable[nrow(existingTable),6] == row[6]){
+      if(!existingTable[nrow(existingTable),"background"] == row["background"]){
         updatedTable <- bind_rows(existingTable, row)
       }
       
@@ -145,54 +240,41 @@ server <- function(input, output, session) {
       }
     }
     
-    table2(updatedTable)
-
-    })
+    combined(updatedTable)
+    
+  })
   
   
   observeEvent(input$delete, {
     
-    existingTable <- table2()
+    existingTable <- combined()
     
-    updatedTable <- table2()[-input$data4_rows_selected,]
+    updatedTable <- combined()[-input$combinedTable_rows_selected,]
     
-    table2(updatedTable)
+    combined(updatedTable)
   })
+  
+  
+  
+################################################################################
+  
   
 ################################################################################
  
-  
-  
-  
-  
-  output$data <-  DT::renderDataTable(dat(), selection = "single")
-  output$data2 <-  DT::renderDataTable(dat2(), selection = "single")
-  output$data3 <-  DT::renderDataTable(dat3(), selection = "single")
-  output$data4 <- DT::renderDataTable(table2(), selection = "single")
-  output$pdf_table <- downloadHandler(
-    
-    filename = "breeding_table.pdf",
-    
-    content = function(file){
-      
-      tempReport <- file.path(tempdir(),"report2.Rmd")
-      
-      file.copy("../report2.Rmd", tempReport, overwrite = TRUE)
-      
-      params <- list(table_for_pdf = dat3())
-      
-      file.copy("report2.Rmd", tempReport, overwrite = TRUE)
-      
-      rmarkdown::render(tempReport, output_file = file,
-                        params = params,
-                        envir = new.env(parent = globalenv()), encoding = "UTF-8")
-      
-    }
-  )
+  output$dataFemales <-  DT::renderDataTable(dataFem(), selection = "single")
+  output$dataMales <-  DT::renderDataTable(dataMal(), selection = "single")
+  output$dataPaired <-  DT::renderDataTable(data_paired(), selection = "single")
+  output$combinedTable <- DT::renderDataTable(combined(), selection = "single")
   
 }
 
 ############################################
-runApp(shinyApp(ui, server), launch.browser = T)
+runApp(shinyApp(ui, server))
 
 #################################################
+
+
+
+
+
+
